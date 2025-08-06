@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Link Highlighter",
+  "version": "1.0",
+  "description": "外部リンクと内部リンクを色分けします。",
+  "permissions": ["scripting"],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ],
+  "icons": {
+    "16": "icon.png"
+  }
+}
