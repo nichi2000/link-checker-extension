@@ -3,8 +3,23 @@ const currentHost = location.hostname;
 document.querySelectorAll("a[href]").forEach(link => {
   const href = link.getAttribute("href");
 
-  // 無効・空・スクリプト・アンカーリンクは無視
-  if (!href || href.startsWith("javascript:") || href.startsWith("#")) return;
+  // 無効・空・スクリプトのリンクは無視
+  if (!href || href.startsWith("javascript:")) return;
+
+  // 同じページ内のアンカーリンクのチェック
+  if (href.startsWith("#")) {
+    const id = href.substring(1);
+    if (id && document.getElementById(id)) {
+      link.style.backgroundColor = "#ADD8E6"; // 薄い青色
+      link.style.color = "black";
+      link.title = `参照IDが存在します: ${href}`;
+    } else if (id) {
+      link.style.backgroundColor = "#D3D3D3"; // 灰色
+      link.style.color = "white";
+      link.title = `参照IDが見つかりません: ${href}`;
+    }
+    return;
+  }
 
   let type = ""; // 判定用
 
@@ -25,7 +40,8 @@ document.querySelectorAll("a[href]").forEach(link => {
       checkLink(url.href, link);
 
     } catch (e) {
-      // 無効なURL
+      // 無効なURL、またはサポートされていないスキーム（例: havascript:）
+      return; // 処理を中断
     }
 
   } else if (href.includes(currentHost)) {
@@ -34,6 +50,7 @@ document.querySelectorAll("a[href]").forEach(link => {
     link.style.backgroundColor = "lightgreen";
     link.style.color = "black";
 
+    // ここではURLの検証は不要。background.js側でfetchが失敗するのを待つ。
     checkLink(href, link);
 
   } else {
@@ -41,8 +58,13 @@ document.querySelectorAll("a[href]").forEach(link => {
     type = "internal_relative";
     link.style.outline = "2px solid green";
 
-    const resolvedUrl = new URL(href, location.href);
-    checkLink(resolvedUrl.href, link, true);
+    try {
+      const resolvedUrl = new URL(href, location.href);
+      checkLink(resolvedUrl.href, link, true);
+    } catch (e) {
+      // 無効なURL、またはサポートされていないスキーム（例: havascript:）
+      return; // 処理を中断
+    }
   }
 });
 
