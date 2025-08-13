@@ -3,7 +3,10 @@
   "name": "Link Highlighter",
   "version": "1.0",
   "description": "外部リンクと内部リンクを色分けします。",
-  "permissions": ["scripting"],
+  "permissions": ["scripting", "tabs", "webRequest"],
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
