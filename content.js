@@ -48,16 +48,12 @@ document.querySelectorAll("a[href]").forEach(link => {
 
 // 🔍 リンク切れチェック関数
 function checkLink(url, link, removeOutline = false) {
-  fetch(url, { method: "HEAD" })
-    .then(response => {
-      if (!response.ok) {
-        link.style.backgroundColor = "#8B4513"; // 茶色
-        link.style.color = "white";
-        link.title = `リンク切れ（ステータス: ${response.status}）`;
-        if (removeOutline) link.style.outline = "none"; // 相対パスの枠線を消す
-      }
-    })
-    .catch(() => {
-      // CORSなどで確認できないときは無視
-    });
+  chrome.runtime.sendMessage({ action: "checkLink", url: url }, response => {
+    if (!response.ok) {
+      link.style.backgroundColor = "#8B4513"; // 茶色
+      link.style.color = "white";
+      link.title = `リンク切れ（ステータス: ${response.status}）`;
+      if (removeOutline) link.style.outline = "none"; // 相対パスの枠線を消す
+    }
+  });
 }
