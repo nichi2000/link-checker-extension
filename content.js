@@ -2,6 +2,12 @@ const currentHost = location.hostname;
 
 document.querySelectorAll("a[href]").forEach(link => {
   const href = link.getAttribute("href");
+  const target = link.getAttribute("target");
+
+  // target="_blank" のリンクを赤枠で表示
+  if (target === "_blank") {
+    link.style.outline = "5px solid red";
+  }
 
   // 無効・空・スクリプトのリンクは無視
   if (!href || href.startsWith("javascript:")) return;
