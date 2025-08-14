@@ -89,3 +89,62 @@ function checkLink(url, link, removeOutline = false) {
 		}
 	});
 }
+
+// --- リンクホバープレビュー機能 ---
+
+let previewTimeout;
+
+// プレビュー用の要素を作成
+const previewContainer = document.createElement("div");
+previewContainer.id = "link-highlighter-preview-container";
+previewContainer.style.display = "none";
+previewContainer.style.position = "fixed";
+previewContainer.style.zIndex = "10000";
+previewContainer.style.border = "2px solid #ccc";
+previewContainer.style.borderRadius = "5px";
+previewContainer.style.boxShadow = "0 5px 15px rgba(0,0,0,0.3)";
+previewContainer.style.backgroundColor = "white";
+previewContainer.style.width = "800px"; // プレビュー画面の幅を大きく
+previewContainer.style.height = "600px"; // プレビュー画面の高さを幅に合わせて調整
+previewContainer.style.overflow = "hidden";
+
+const previewIframe = document.createElement("iframe");
+previewIframe.id = "link-highlighter-preview-iframe";
+previewIframe.style.width = "1280px"; // PC版の幅を想定
+previewIframe.style.height = "720px"; // PC版のアスペクト比を想定（適宜調整）
+previewIframe.style.border = "none";
+previewIframe.style.transformOrigin = "top left";
+previewIframe.style.transform = `scale(${800 / 1280})`; // previewContainerの幅に合わせて縮小
+
+previewContainer.appendChild(previewIframe);
+document.body.appendChild(previewContainer);
+
+// プレビュー表示イベントをリンクに追加
+document.querySelectorAll("a[href]").forEach(link => {
+    link.addEventListener("mouseenter", (e) => {
+        const href = link.getAttribute("href");
+        // プレビュー非対象のリンクは無視
+        if (!href || href.startsWith("#") || href.startsWith("javascript:")) {
+            return;
+        }
+
+        previewTimeout = setTimeout(() => {
+            const resolvedUrl = new URL(href, location.href).href;
+            previewIframe.src = resolvedUrl;
+
+            // 位置調整 (マウスカーソルの右下)
+            const x = e.clientX + 20;
+            const y = e.clientY + 20;
+            previewContainer.style.left = `${x}px`;
+            previewContainer.style.top = `${y}px`;
+
+            previewContainer.style.display = "block";
+        }, 500); // 500ms後に表示
+    });
+
+    link.addEventListener("mouseleave", () => {
+        clearTimeout(previewTimeout);
+        previewContainer.style.display = "none";
+        previewIframe.src = "about:blank"; // iframeを空にする
+    });
+});
