@@ -1,156 +1,200 @@
 const currentHost = location.hostname;
 
-document.querySelectorAll("a[href]").forEach(link => {
-  const href = link.getAttribute("href");
-  const target = link.getAttribute("target");
+function processLink(link) {
+	const href = link.getAttribute("href");
+	const target = link.getAttribute("target");
 
-  // target="_blank" のリンクを赤枠で表示
-  if (target === "_blank") {
-    link.style.outline = "5px solid red";
-  }
+	// target="_blank" のリンクを赤枠で表示（既存の枠より優先）
+	if (target === "_blank") {
+		link.style.setProperty("outline", "5px solid red", "important");
+	}
 
-  // 無効・空・スクリプトのリンクは無視
-  if (!href || href.startsWith("javascript:")) return;
+	// 無効・空・特定スキームのリンクは無視
+	if (!href) return;
+	const lowerHref = href.trim().toLowerCase();
+	if (
+		lowerHref.startsWith("javascript:") ||
+		lowerHref.startsWith("mailto:") ||
+		lowerHref.startsWith("tel:") ||
+		lowerHref.startsWith("sms:") ||
+		lowerHref.startsWith("data:") ||
+		lowerHref.startsWith("blob:") ||
+		lowerHref.startsWith("about:")
+	) {
+		return;
+	}
 
-  // 同じページ内のアンカーリンクのチェック
-  if (href.startsWith("#")) {
-    const id = href.substring(1);
-    if (id && document.getElementById(id)) {
-      link.style.backgroundColor = "#ADD8E6"; // 薄い青色
-      link.style.color = "black";
-      link.title = `参照IDが存在します: ${href}`;
-    } else if (id) {
-      link.style.backgroundColor = "#D3D3D3"; // 灰色
-      link.style.color = "white";
-      link.title = `参照IDが見つかりません: ${href}`;
-    }
-    return;
-  }
+	// 同じページ内のアンカー
+	if (href.startsWith("#")) {
+		const id = href.substring(1);
+		if (id && document.getElementById(id)) {
+			applyHighlightStyles(link, { bg: "#ADD8E6", color: "black" });
+			link.title = `参照IDが存在します: ${href}`;
+		} else if (id) {
+			applyHighlightStyles(link, { bg: "#D3D3D3", color: "white" });
+			link.title = `参照IDが見つかりません: ${href}`;
+		}
+		return;
+	}
 
-  let type = ""; // 判定用
+	// 判定：絶対URLか相対パスか
+	if (href.startsWith("http") || href.startsWith("//")) {
+		try {
+			const url = new URL(href);
+			if (url.hostname === currentHost) {
+				applyHighlightStyles(link, { bg: "lightgreen", color: "black", outline: "2px solid green" });
+			} else {
+				applyHighlightStyles(link, { bg: "pink", color: "black" });
+			}
+			checkLink(url.href, link);
+		} catch {
+			return;
+		}
+	} else if (href.startsWith("/") && !href.startsWith("//")) {
+		// ルート相対
+		applyHighlightStyles(link, { bg: "lightgreen", color: "black", outline: "2px solid green" });
+		try {
+			const resolvedUrl = new URL(href, location.href);
+			checkLink(resolvedUrl.href, link, true);
+		} catch {
+			return;
+		}
+	} else if (href.includes(currentHost)) {
+		// 文字列としてホスト名を含む絶対URL
+		applyHighlightStyles(link, { bg: "lightgreen", color: "black", outline: "2px solid green" });
+		checkLink(href, link);
+	} else {
+		// その他の相対
+		applyHighlightStyles(link, { bg: "lightgreen", color: "black", outline: "2px solid green" });
+		try {
+			const resolvedUrl = new URL(href, location.href);
+			checkLink(resolvedUrl.href, link, true);
+		} catch {
+			return;
+		}
+	}
 
-  // 判定：絶対URLか相対パスか
-  if (href.startsWith("http") || href.startsWith("//")) {
-    try {
-      const url = new URL(href);
-      if (url.hostname === currentHost) {
-        type = "internal_absolute";
-        link.style.backgroundColor = "lightgreen";
-        link.style.color = "black";
-      } else {
-        type = "external_absolute";
-        link.style.backgroundColor = "pink";
-        link.style.color = "black";
-      }
+	// プレビュー（重複バインド防止）
+	if (!link.dataset.lhPreviewBound) {
+		link.addEventListener("mouseenter", (e) => {
+			const h = link.getAttribute("href");
+			if (!h || h.startsWith("#") || /^(javascript:|mailto:|tel:|sms:|data:|blob:|about:)/i.test(h)) return;
+			window.__lhPreviewTimeout = setTimeout(() => {
+				const resolved = new URL(h, location.href).href;
+				const c = window.__lhPreviewContainer;
+				const f = window.__lhPreviewIframe;
+				if (!c || !f) return;
+				f.src = resolved;
+				c.style.left = `${e.clientX + 20}px`;
+				c.style.top = `${e.clientY + 20}px`;
+				c.style.display = "block";
+			}, 500);
+		});
+		link.addEventListener("mouseleave", () => {
+			clearTimeout(window.__lhPreviewTimeout);
+			const c = window.__lhPreviewContainer;
+			const f = window.__lhPreviewIframe;
+			if (c && f) {
+				c.style.display = "none";
+				f.src = "about:blank";
+			}
+		});
+		link.dataset.lhPreviewBound = "1";
+	}
+}
 
-      checkLink(url.href, link);
+// Utility to apply highlight styles on link and its first block child if needed
+function applyHighlightStyles(link, { bg, color, outline }) {
+	try {
+		const firstChild = link.firstElementChild;
+		const hasBlockChild = (() => {
+			if (!firstChild) return false;
+			const d = getComputedStyle(firstChild).display;
+			return d === "block" || d === "flex" || d === "grid" || d === "inline-block";
+		})();
 
-    } catch (e) {
-      // 無効なURL、またはサポートされていないスキーム（例: havascript:）
-      return; // 処理を中断
-    }
+		// Prefer styling the block-like child if present to avoid inline a quirks
+		const target = hasBlockChild ? firstChild : link;
 
-  } else if (href.includes(currentHost)) {
-    // hostname が文字列として含まれている場合（たとえば href="https://example.com/page"）
-    type = "internal_absolute";
-    link.style.backgroundColor = "lightgreen";
-    link.style.color = "black";
+		if (bg) target.style.setProperty("background-color", bg, "important");
+		if (color) target.style.setProperty("color", color, "important");
+		if (outline) target.style.setProperty("outline", outline, "important");
 
-    // ここではURLの検証は不要。background.js側でfetchが失敗するのを待つ。
-    checkLink(href, link);
+		// Ensure target box renders as a cohesive area
+		target.style.setProperty("box-sizing", "border-box", "important");
 
-  } else {
-    // 相対パスとみなす（内部リンク）
-    type = "internal_relative";
-    link.style.outline = "2px solid green";
+		// If we styled the child, clear conflicting styles on the anchor to avoid stray outlines
+		if (target !== link && outline) {
+			link.style.setProperty("outline", "none", "important");
+		}
+	} catch (e) {
+		console.error("Link Highlighter: Error applying styles", e);
+	}
+}
 
-    try {
-      const resolvedUrl = new URL(href, location.href);
-      checkLink(resolvedUrl.href, link, true);
-    } catch (e) {
-      // 無効なURL、またはサポートされていないスキーム（例: havascript:）
-      return; // 処理を中断
-    }
-  }
+
+// 初期処理
+Array.from(document.querySelectorAll("a[href]")).forEach(processLink);
+
+// プレビュー用要素（1回だけ作る）
+(function ensurePreviewElements() {
+	if (window.__lhPreviewContainer) return;
+	const container = document.createElement("div");
+	container.id = "link-highlighter-preview-container";
+	container.style.display = "none";
+	container.style.position = "fixed";
+	container.style.zIndex = "10000";
+	container.style.border = "2px solid #ccc";
+	container.style.borderRadius = "5px";
+	container.style.boxShadow = "0 5px 15px rgba(0,0,0,0.3)";
+	container.style.backgroundColor = "white";
+	container.style.width = "800px";
+	container.style.height = "600px";
+	container.style.overflow = "hidden";
+
+	const iframe = document.createElement("iframe");
+	iframe.id = "link-highlighter-preview-iframe";
+	iframe.style.width = "1280px";
+	iframe.style.height = "720px";
+	iframe.style.border = "none";
+	iframe.style.transformOrigin = "top left";
+	iframe.style.transform = `scale(${800 / 1280})`;
+
+	container.appendChild(iframe);
+	document.body.appendChild(container);
+	window.__lhPreviewContainer = container;
+	window.__lhPreviewIframe = iframe;
+})();
+
+// 動的追加への対応
+const observer = new MutationObserver((mutations) => {
+	for (const m of mutations) {
+		if (m.type === "childList") {
+			m.addedNodes.forEach(node => {
+				if (node.nodeType !== 1) return;
+				if (node.matches && node.matches("a[href]")) processLink(node);
+				const anchors = node.querySelectorAll ? node.querySelectorAll("a[href]") : [];
+				anchors.forEach(processLink);
+			});
+		} else if (m.type === "attributes" && m.target.matches && m.target.matches("a[href]")) {
+			processLink(m.target);
+		}
+	}
 });
+observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["href", "target"] });
 
 // 🔍 リンク切れチェック関数
 function checkLink(url, link, removeOutline = false) {
 	chrome.runtime.sendMessage({ action: "checkLink", url: url }, response => {
 		if (!response) return;
 		const { status, ok } = response;
-
-		// 成功扱い
 		if (ok === true) return;
-
-		// 不明や到達のみ（status=0など）は塗らない
 		if (status === 0 || typeof status !== "number") return;
-
-		// 4xx/5xx のみ明確な失敗として塗る
 		if (status >= 400 && status < 600) {
-			link.style.backgroundColor = "#8B4513"; // 茶色
-			link.style.color = "white";
+			link.style.setProperty("background-color", "#8B4513", "important");
+			link.style.setProperty("color", "white", "important");
 			link.title = `リンク切れ（ステータス: ${status}）`;
-			if (removeOutline) link.style.outline = "none"; // 相対パスの枠線を消す
+			if (removeOutline) link.style.setProperty("outline", "none", "important");
 		}
 	});
 }
-
-// --- リンクホバープレビュー機能 ---
-
-let previewTimeout;
-
-// プレビュー用の要素を作成
-const previewContainer = document.createElement("div");
-previewContainer.id = "link-highlighter-preview-container";
-previewContainer.style.display = "none";
-previewContainer.style.position = "fixed";
-previewContainer.style.zIndex = "10000";
-previewContainer.style.border = "2px solid #ccc";
-previewContainer.style.borderRadius = "5px";
-previewContainer.style.boxShadow = "0 5px 15px rgba(0,0,0,0.3)";
-previewContainer.style.backgroundColor = "white";
-previewContainer.style.width = "800px"; // プレビュー画面の幅を大きく
-previewContainer.style.height = "600px"; // プレビュー画面の高さを幅に合わせて調整
-previewContainer.style.overflow = "hidden";
-
-const previewIframe = document.createElement("iframe");
-previewIframe.id = "link-highlighter-preview-iframe";
-previewIframe.style.width = "1280px"; // PC版の幅を想定
-previewIframe.style.height = "720px"; // PC版のアスペクト比を想定（適宜調整）
-previewIframe.style.border = "none";
-previewIframe.style.transformOrigin = "top left";
-previewIframe.style.transform = `scale(${800 / 1280})`; // previewContainerの幅に合わせて縮小
-
-previewContainer.appendChild(previewIframe);
-document.body.appendChild(previewContainer);
-
-// プレビュー表示イベントをリンクに追加
-document.querySelectorAll("a[href]").forEach(link => {
-    link.addEventListener("mouseenter", (e) => {
-        const href = link.getAttribute("href");
-        // プレビュー非対象のリンクは無視
-        if (!href || href.startsWith("#") || href.startsWith("javascript:")) {
-            return;
-        }
-
-        previewTimeout = setTimeout(() => {
-            const resolvedUrl = new URL(href, location.href).href;
-            previewIframe.src = resolvedUrl;
-
-            // 位置調整 (マウスカーソルの右下)
-            const x = e.clientX + 20;
-            const y = e.clientY + 20;
-            previewContainer.style.left = `${x}px`;
-            previewContainer.style.top = `${y}px`;
-
-            previewContainer.style.display = "block";
-        }, 500); // 500ms後に表示
-    });
-
-    link.addEventListener("mouseleave", () => {
-        clearTimeout(previewTimeout);
-        previewContainer.style.display = "none";
-        previewIframe.src = "about:blank"; // iframeを空にする
-    });
-});
