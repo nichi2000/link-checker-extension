@@ -231,12 +231,12 @@ function handleMouseEnter(e) {
                     anchorPreviewContent.style.display = 'none';
                 } else {
                     // ロードはされたがコンテンツがない（X-Frame-Optionsなどでブロックされた可能性）
-                    anchorPreviewContent.textContent = 'このサイトはプレビューを許可していません。';
+                    // anchorPreviewContent.textContent = 'このサイトはプレビューを許可していません。';
                     anchorPreviewContent.style.display = 'flex';
                 }
             } catch (e) {
                 // セキュリティエラーが発生した場合は、ロードがブロックされたと判断
-                anchorPreviewContent.textContent = 'このサイトはプレビューを許可していません。';
+                // anchorPreviewContent.textContent = 'このサイトはプレビューを許可していません。';
                 anchorPreviewContent.style.display = 'flex';
             }
         };
