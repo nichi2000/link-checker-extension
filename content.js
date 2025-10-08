@@ -68,9 +68,44 @@ function processLink(link) {
 
 // --- プレビュー機能 ---
 let previewTimeout;
+
+const PREVIEW_WIDTH = 640;
+const PREVIEW_HEIGHT = 480;
+const VIRTUAL_IFRAME_WIDTH = 1280;
+const VIRTUAL_IFRAME_HEIGHT = 1000;
+
 const previewContainer = document.createElement("div");
-const previewIframe = document.createElement("iframe");
+const previewIframe = document.createElement("iframe"); // constに変更
 const anchorPreviewContent = document.createElement("div"); // アンカープレビュー用の新しいdiv
+
+// --- ページ読み込み時にheadとbodyの情報をキャッシュ ---
+let cachedHeadHtml = '';
+let cachedBodyClass = '';
+let cachedBodyCriticalStyles = '';
+
+// スタイル情報をキャッシュする関数
+function cachePageStyles() {
+    cachedHeadHtml = document.head.innerHTML;
+    cachedBodyClass = document.body.className;
+    const computedStyle = window.getComputedStyle(document.body);
+    cachedBodyCriticalStyles = `
+        margin: ${computedStyle.margin};
+        padding: ${computedStyle.padding};
+        font-family: ${computedStyle.fontFamily};
+        font-size: ${computedStyle.fontSize};
+        color: ${computedStyle.color};
+        line-height: ${computedStyle.lineHeight};
+        background-color: ${computedStyle.backgroundColor};
+    `;
+}
+
+// ページの読み込み状態に応じてキャッシュを実行
+if (document.readyState === 'loading') {
+    document.addEventListener("DOMContentLoaded", cachePageStyles);
+} else {
+    cachePageStyles();
+}
+
 
 function setupPreviewElements() {
     previewContainer.id = "link-highlighter-preview-container";
@@ -82,29 +117,44 @@ function setupPreviewElements() {
         border-radius: 5px;
         box-shadow: 0 5px 15px rgba(0,0,0,0.3);
         background-color: white;
-        width: 800px;
-        height: 600px;
+        width: ${PREVIEW_WIDTH}px;
+        height: ${PREVIEW_HEIGHT}px;
         overflow: hidden;
     `;
-    previewIframe.id = "link-highlighter-preview-iframe";
-    previewIframe.style.cssText = `
-        width: 1280px;
-        height: 720px;
-        border: none;
-        transform-origin: top left;
-        transform: scale(${800 / 1280});
-    `;
-    anchorPreviewContent.id = "link-highlighter-anchor-preview";
+    // 初期状態ではコンテナに何も入れず、bodyにだけ追加しておく
+    document.body.appendChild(previewContainer);
+
+    anchorPreviewContent.id = "link-highlighter-preview-message";
     anchorPreviewContent.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
         width: 100%;
         height: 100%;
-        overflow: auto;
-        padding: 15px;
+        background-color: rgba(255, 255, 255, 0.95);
+        color: black;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        padding: 10px;
         box-sizing: border-box;
+        font-size: 1.2em;
+        z-index: 10001;
+        display: none; /* 初期状態では非表示 */
+    `;
+    previewContainer.appendChild(anchorPreviewContent);
+
+    // iframeを一度だけ作成し、previewContainerに追加
+    previewIframe.id = "link-highlighter-preview-iframe";
+    previewIframe.style.cssText = `
+        width: ${VIRTUAL_IFRAME_WIDTH}px;
+        height: ${VIRTUAL_IFRAME_HEIGHT}px;
+        border: none;
+        transform-origin: top left;
+        transform: scale(${PREVIEW_WIDTH / VIRTUAL_IFRAME_WIDTH});
     `;
     previewContainer.appendChild(previewIframe);
-    previewContainer.appendChild(anchorPreviewContent);
-    document.body.appendChild(previewContainer);
 }
 
 function handleMouseEnter(e) {
@@ -112,9 +162,56 @@ function handleMouseEnter(e) {
     const href = link.getAttribute("href");
     if (!href || href.startsWith("javascript:")) return;
 
+    // 既存のタイトルを保存し、クリア
+    if (link.title) {
+        link.dataset.originalTitle = link.title;
+        link.title = '';
+    }
+
     clearTimeout(previewTimeout);
 
     previewTimeout = setTimeout(() => {
+        // --- iframeを毎回再生成 ---
+        if (previewIframe) {
+            // previewIframe.remove(); // 削除コードをコメントアウトまたは削除
+        }
+        // previewIframe = document.createElement("iframe"); // 再生成コードをコメントアウトまたは削除
+        // previewIframe.id = "link-highlighter-preview-iframe";
+        // previewIframe.style.cssText = `
+        //     width: ${VIRTUAL_IFRAME_WIDTH}px;
+        //     height: ${VIRTUAL_IFRAME_HEIGHT}px;
+        //     border: none;
+        //     transform-origin: top left;
+        //     transform: scale(${PREVIEW_WIDTH / VIRTUAL_IFRAME_WIDTH});
+        // `;
+        // previewContainer.appendChild(previewIframe);
+
+        // iframeのロードエラーを監視
+        previewIframe.onload = () => {
+            try {
+                // iframeのコンテンツにアクセスを試みて、セキュリティエラーが発生するかどうかをチェック
+                // クロスオリジンの場合はここでエラーが発生し、catchブロックに移行する
+                const iframeDocument = previewIframe.contentDocument || previewIframe.contentWindow.document;
+                if (iframeDocument && iframeDocument.body && iframeDocument.body.children.length > 0) {
+                    // ロード成功と判断し、エラーメッセージを非表示にする
+                    anchorPreviewContent.style.display = 'none';
+                } else {
+                    // ロードはされたがコンテンツがない（X-Frame-Optionsなどでブロックされた可能性）
+                    anchorPreviewContent.textContent = 'このサイトはプレビューを許可していません。';
+                    anchorPreviewContent.style.display = 'flex';
+                }
+            } catch (e) {
+                // セキュリティエラーが発生した場合は、ロードがブロックされたと判断
+                anchorPreviewContent.textContent = 'このサイトはプレビューを許可していません。';
+                anchorPreviewContent.style.display = 'flex';
+            }
+        };
+        previewIframe.onerror = () => {
+            // ネットワークエラーなど、iframe自体がロードできなかった場合
+            anchorPreviewContent.textContent = 'プレビューの読み込み中にエラーが発生しました。';
+            anchorPreviewContent.style.display = 'flex';
+        };
+
         if (href.startsWith("#")) {
             // --- アンカーリンクのプレビュー処理 ---
             const id = href.substring(1);
@@ -122,44 +219,83 @@ function handleMouseEnter(e) {
             const targetElement = document.getElementById(id);
             if (!targetElement) return;
 
-            // コンテナを準備
-            previewIframe.style.display = 'none';
-            anchorPreviewContent.style.display = 'block';
-            anchorPreviewContent.innerHTML = ''; // 前の内容をクリア
+            const headHtml = cachedHeadHtml;
+            const bodyClass = cachedBodyClass;
+            const criticalStyles = cachedBodyCriticalStyles;
 
-            // 要素をクローンして追加
-            const clone = targetElement.cloneNode(true);
-            clone.removeAttribute('id'); // IDの重複を避ける
-            anchorPreviewContent.appendChild(clone);
+            // 遷移先の要素のみを取得
+            const previewHtml = targetElement.outerHTML;
+
+            previewIframe.srcdoc = `
+                <!DOCTYPE html>
+                <html>
+                ${headHtml}
+                <body class="${bodyClass}" style="${criticalStyles} overflow-y: auto; overflow-x: hidden;">
+                    <div style="padding: 15px; font-size: 3em;">${previewHtml}</div>
+                </body>
+                </html>
+            `;
 
         } else {
             // --- 通常URLのプレビュー処理 ---
             try {
-                // コンテナを準備
-                anchorPreviewContent.style.display = 'none';
-                previewIframe.style.display = 'block';
-                
                 const resolvedUrl = new URL(href, location.href).href;
                 previewIframe.src = resolvedUrl;
             } catch (err) {
                 return; // 無効なURL
             }
         }
-        
-        // メインコンテナを位置調整して表示
-        const x = e.clientX + 20;
-        const y = e.clientY + 20;
+
+        // メインコンテナを表示し、位置を調整
+        previewContainer.style.display = "block"; // ここに移動
+        const previewWidth = previewContainer.offsetWidth;
+        const previewHeight = previewContainer.offsetHeight;
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        // 基本位置をカーソルの右下に設定
+        let x = e.clientX + 20;
+        let y = e.clientY + 20;
+
+        // 画面右端からはみ出す場合、カーソルの左側に表示
+        if (x + previewWidth > viewportWidth - 10) {
+            x = e.clientX - previewWidth - 20;
+        }
+        // 画面左端からはみ出す場合 (左に切り替えた後)、左端に寄せる
+        if (x < 10) {
+            x = 10;
+        }
+
+        // 画面下端からはみ出す場合、カーソルの上側に表示
+        if (y + previewHeight > viewportHeight - 10) {
+            y = e.clientY - previewHeight - 20;
+        }
+        // 画面上端からはみ出す場合 (上に切り替えた後)、上端に寄せる
+        if (y < 10) {
+            y = 10;
+        }
+
         previewContainer.style.left = `${x}px`;
         previewContainer.style.top = `${y}px`;
-        previewContainer.style.display = "block";
-    }, 500);
+    }, 300);
 }
 
-function handleMouseLeave() {
+function handleMouseLeave(e) {
+    const link = e.currentTarget;
     clearTimeout(previewTimeout);
     previewContainer.style.display = "none";
-    previewIframe.src = "about:blank";
-    anchorPreviewContent.innerHTML = ''; // アンカープレビューもクリア
+    
+    // iframeをコンテナから削除してリセット
+    if (previewIframe) {
+        previewIframe.src = "about:blank"; // iframeのコンテンツをクリア
+    }
+    previewIframe = null; // ガベージコレクションを促す
+
+    // 元のタイトルを復元
+    if (link && link.dataset.originalTitle) {
+        link.title = link.dataset.originalTitle;
+        delete link.dataset.originalTitle;
+    }
 }
 
 // --- 初期化処理 ---

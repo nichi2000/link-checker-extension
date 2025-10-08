@@ -16,8 +16,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     const getWithNoCors = () => {
       return fetch(url, { method: "GET", mode: "no-cors", redirect: "follow" })
-        .then(resp => ({ status: resp.status || 0, ok: false })) // opaque → 0
-        .catch(() => ({ status: 0, ok: false }));
+        .then(resp => ({ status: resp.status || 0, ok: true })) // no-corsではステータスが0でも成功とみなす
+        .catch(() => ({ status: 0, ok: true })); // fetchが完全に失敗した場合でも、ステータス0で成功とみなす
     };
 
     fetch(url, { method: "HEAD", redirect: "follow" })
