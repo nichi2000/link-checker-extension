@@ -1,26 +1,33 @@
 const currentHost = location.hostname;
+let highlightingEnabled = false; // ハイライト機能の有効/無効を管理するフラグ
 
-// --- リンク処理のメイン関数 ---
-function processLink(link) {
-    // 既に処理済みの場合はスキップ
-    if (link.dataset.linkHighlighterProcessed) return;
+// --- リンクから全てのハイライトスタイルを削除するヘルパー関数 ---
+function clearLinkStyles(link) {
+    link.style.removeProperty("outline");
+    link.style.removeProperty("background-color");
+    link.style.removeProperty("color");
+    if (link.dataset.originalTitle) {
+        link.title = link.dataset.originalTitle;
+        delete link.dataset.originalTitle;
+    }
+    link.dataset.linkHighlighterProcessed = "false";
+    link.removeEventListener("mouseenter", handleMouseEnter);
+    link.removeEventListener("mouseleave", handleMouseLeave);
+}
 
+// --- リンクにハイライトスタイルを適用するヘルパー関数 ---
+function applyHighlightingStyles(link) {
     const href = link.getAttribute("href");
     const target = link.getAttribute("target");
 
-    // --- スタイル適用ロジック ---
-    // target="_blank" のリンクを赤枠で表示
     if (target === "_blank") {
         link.style.setProperty("outline", "5px solid red", "important");
     }
 
-    // 無効・空・スクリプトのリンクは無視
     if (!href || href.startsWith("javascript:")) {
-        link.dataset.linkHighlighterProcessed = "true";
         return;
     }
 
-    // 同じページ内のアンカーリンクのチェック
     if (href.startsWith("#")) {
         const id = href.substring(1);
         if (id && document.getElementById(id)) {
@@ -32,24 +39,20 @@ function processLink(link) {
             link.style.setProperty("color", "white", "important");
             link.title = `参照IDが見つかりません: ${href}`;
         }
-        // ここでreturnせずに、後続のプレビューイベントバインド処理へ進める
     } else if (href.startsWith("http") || href.startsWith("//")) {
         try {
             const url = new URL(href);
             if (url.hostname === currentHost) {
-                // 内部リンク
                 link.style.setProperty("background-color", "lightgreen", "important");
                 link.style.setProperty("color", "black", "important");
                 link.style.setProperty("outline", "2px solid green", "important");
             } else {
-                // 外部リンク
                 link.style.setProperty("background-color", "pink", "important");
                 link.style.setProperty("color", "black", "important");
             }
             checkLink(url.href, link);
         } catch (e) { /* 無効なURL */ }
     } else {
-        // 相対パス（内部リンク）
         link.style.setProperty("background-color", "lightgreen", "important");
         link.style.setProperty("color", "black", "important");
         link.style.setProperty("outline", "2px solid green", "important");
@@ -58,12 +61,43 @@ function processLink(link) {
             checkLink(resolvedUrl.href, link, true);
         } catch (e) { /* 無効なURL */ }
     }
+}
 
-    // --- プレビューイベントのバインド ---
+// --- リンクにイベントリスナーをバインドするヘルパー関数 ---
+function addLinkEventListeners(link) {
     link.addEventListener("mouseenter", handleMouseEnter);
     link.addEventListener("mouseleave", handleMouseLeave);
+}
 
-    link.dataset.linkHighlighterProcessed = "true";
+// --- リンクからイベントリスナーを削除するヘルパー関数 ---
+function removeLinkEventListeners(link) {
+    link.removeEventListener("mouseenter", handleMouseEnter);
+    link.removeEventListener("mouseleave", handleMouseLeave);
+}
+
+// --- リンク処理のメイン関数 ---
+function processLink(link) {
+    if (link.dataset.linkHighlighterProcessed === "true" && highlightingEnabled) return;
+    if (link.dataset.linkHighlighterProcessed === "false" && !highlightingEnabled) return;
+
+    if (highlightingEnabled) {
+        clearLinkStyles(link); // 念のため既存スタイルをクリア
+        applyHighlightingStyles(link);
+        addLinkEventListeners(link);
+        link.dataset.linkHighlighterProcessed = "true";
+    } else {
+        clearLinkStyles(link);
+        removeLinkEventListeners(link);
+        link.dataset.linkHighlighterProcessed = "false";
+    }
+}
+
+// --- ページ上の全てのリンクに対してハイライトを適用/削除する関数 ---
+function updateAllLinksHighlighting() {
+    document.querySelectorAll("a[href]").forEach(link => {
+        // processLinkの内部でhighlightingEnabledをチェックするため、ここでは直接呼び出す
+        processLink(link);
+    });
 }
 
 // --- プレビュー機能 ---
@@ -298,9 +332,26 @@ function handleMouseLeave(e) {
     }
 }
 
-// --- 初期化処理 ---
-setupPreviewElements();
-document.querySelectorAll("a[href]").forEach(processLink);
+// 🔍 リンク切れチェック関数
+function checkLink(url, link, removeOutline = false) {
+    if (!highlightingEnabled) {
+        // ハイライトが無効ならリンク切れチェックのスタイルも適用しない
+        clearLinkStyles(link);
+        return;
+    }
+    chrome.runtime.sendMessage({ action: "checkLink", url: url }, response => {
+        if (!response) return;
+        const { status, ok } = response;
+        if (ok) return;
+        if (status === 0 || typeof status !== "number") return;
+        if (status >= 400 && status < 600) {
+            link.style.setProperty("background-color", "#8B4513", "important");
+            link.style.setProperty("color", "white", "important");
+            link.title = `リンク切れ（ステータス: ${status}）`;
+            if (removeOutline) link.style.setProperty("outline", "none", "important");
+        }
+    });
+}
 
 // --- 動的コンテンツ監視 ---
 const observer = new MutationObserver((mutations) => {
@@ -318,20 +369,23 @@ const observer = new MutationObserver((mutations) => {
     });
 });
 
+// MutationObserverの監視を有効にする
 observer.observe(document.body, { childList: true, subtree: true });
 
-// 🔍 リンク切れチェック関数
-function checkLink(url, link, removeOutline = false) {
-    chrome.runtime.sendMessage({ action: "checkLink", url: url }, response => {
-        if (!response) return;
-        const { status, ok } = response;
-        if (ok) return;
-        if (status === 0 || typeof status !== "number") return;
-        if (status >= 400 && status < 600) {
-            link.style.setProperty("background-color", "#8B4513", "important");
-            link.style.setProperty("color", "white", "important");
-            link.title = `リンク切れ（ステータス: ${status}）`;
-            if (removeOutline) link.style.setProperty("outline", "none", "important");
-        }
-    });
-}
+// --- 初期化処理 (以前の setupPreviewElements() と document.querySelectorAll() の呼び出しを置き換え) ---
+setupPreviewElements();
+
+// ポップアップからのメッセージをリッスン
+chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+    if (request.action === "toggleHighlight") {
+        highlightingEnabled = request.enabled;
+        updateAllLinksHighlighting();
+    }
+    sendResponse({status: "ok"});
+});
+
+// ページの読み込み時またはコンテンツスクリプトの実行時に設定をロード
+chrome.storage.sync.get('highlightEnabled', function(data) {
+    highlightingEnabled = data.highlightEnabled !== undefined ? data.highlightEnabled : false; // デフォルトはOFF
+    updateAllLinksHighlighting();
+});

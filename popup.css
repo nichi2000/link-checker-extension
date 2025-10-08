@@ -1,0 +1,62 @@
+body{
+    width: 400px;
+}
+.box{
+    display: flex;
+    align-items: center;
+    justify-content: left;
+    gap: 10px;
+}
+.toggle-button-4 {
+    display: flex;
+    align-items: center;
+    position: relative;
+    width: 50px;
+    height: 25px;
+    border-radius: 50px;
+    box-sizing: content-box;
+    background-color: #dddddd;
+    cursor: pointer;
+    transition: background-color .4s;
+}
+
+.toggle-button-4:has(:checked) {
+    background-color: #75bbff;
+}
+
+.toggle-button-4::before {
+    position: absolute;
+    left: 3px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background-color: #fff;
+    content: '';
+    transition: left .4s;
+}
+
+.toggle-button-4:has(:checked)::before {
+    left: 27px;
+    background-color: #fff;
+    /* background-color: #75bbff; */
+}
+
+.toggle-button-4::after {
+    position: absolute;
+    left: 13px;
+    transform: translateX(-50%);
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.7em; /* .1emから0.7emに調整 */
+    content: 'OFF';
+    transition: left .4s;
+}
+
+.toggle-button-4:has(:checked)::after {
+    left: 37px; /* 35pxから38pxに調整 */
+    content: 'ON';
+}
+
+.toggle-button-4 input {
+    display: none;
+}
