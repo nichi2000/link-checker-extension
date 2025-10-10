@@ -21,7 +21,7 @@ function applyHighlightingStyles(link) {
     const target = link.getAttribute("target");
 
     if (target === "_blank") {
-        link.style.setProperty("outline", "5px solid red", "important");
+        link.style.setProperty("outline", "3px solid #f67300", "important");
     }
 
     if (!href || href.startsWith("javascript:")) {
@@ -45,9 +45,9 @@ function applyHighlightingStyles(link) {
             if (url.hostname === currentHost) {
                 link.style.setProperty("background-color", "lightgreen", "important");
                 link.style.setProperty("color", "black", "important");
-                link.style.setProperty("outline", "2px solid green", "important");
+                link.style.setProperty("outline", "3px solid green", "important");
             } else {
-                link.style.setProperty("background-color", "pink", "important");
+                link.style.setProperty("background-color", "#f5b277", "important");
                 link.style.setProperty("color", "black", "important");
             }
             checkLink(url.href, link);
@@ -55,7 +55,7 @@ function applyHighlightingStyles(link) {
     } else {
         link.style.setProperty("background-color", "lightgreen", "important");
         link.style.setProperty("color", "black", "important");
-        link.style.setProperty("outline", "2px solid green", "important");
+        link.style.setProperty("outline", "3px solid green", "important");
         try {
             const resolvedUrl = new URL(href, location.href);
             checkLink(resolvedUrl.href, link, true);
@@ -345,7 +345,7 @@ function checkLink(url, link, removeOutline = false) {
         if (ok) return;
         if (status === 0 || typeof status !== "number") return;
         if (status >= 400 && status < 600) {
-            link.style.setProperty("background-color", "#8B4513", "important");
+            link.style.setProperty("background-color", "#e11e09", "important");
             link.style.setProperty("color", "white", "important");
             link.title = `リンク切れ（ステータス: ${status}）`;
             if (removeOutline) link.style.setProperty("outline", "none", "important");
