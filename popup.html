@@ -5,19 +5,24 @@
     <link rel="stylesheet" type="text/css" href="popup.css" />
   </head>
   <body>
-    <p>#️⃣ <span style="background-color: #ADD8E6">ページ内ID遷移あり</span></p>
-    <p>❓ <span style="background-color: #D3D3D3;">ページ内ID遷移なし</span></p>
-    <p>🏠 <span style="background-color: lightgreen">内部リンク・絶対パス</span></p>
-    <p>📁 <span style="background-color: lightgreen; border: 3px solid green;">内部リンク・相対パス</span></p>
-    <p>🌐 <span style="background-color: #f5b277;">外部リンク</span></p>
-    <p>↗️ <span style="background-color: #f5b277; border: 3px solid #f67300;">外部リンク・新規タブ開く</span></p>
-    <p>⚠️ <span style="color: #fff; background-color: #e11e09;">リンク切れ</span></p>
-    <div class="box">
-      <p>リンクハイライト機能：</p>
-      <label class="toggle-button-4"
-        ><input type="checkbox" id="enableHighlight"
-      /></label>
-    </div>
-    <script src="popup.js" defer></script>
+    <section style="padding: 20px;">
+      <p>#️⃣ <span style="background-color: #ADD8E6">ページ内ID遷移あり</span></p>
+      <p>❓ <span style="background-color: #D3D3D3;">ページ内ID遷移なし</span></p>
+      <p>🏠 <span style="background-color: lightgreen">内部リンク・絶対パス</span></p>
+      <p>📁 <span style="background-color: lightgreen; border: 3px solid green;">内部リンク・相対パス</span></p>
+      <p>🌐 <span style="background-color: #f5b277;">外部リンク</span></p>
+      <p>↗️ <span style="background-color: #f5b277; border: 3px solid #f67300;">外部リンク・新規タブ開く</span></p>
+      <p>⚠️ <span style="color: #fff; background-color: #e11e09;">リンク切れ</span></p>
+      <div class="box">
+        <p>リンクハイライト：</p>
+        <label class="toggle-button-4"><input type="checkbox" id="enableHighlight"></label>
+      </div>
+      <div class="box">
+        <p>プレビュー表示：</p>
+        <label class="toggle-button-4"><input type="checkbox" id="enablePreview"></label>
+      </div>
+      <p style="font-size: smaller;">* プレビューはサイトによって表示されない場合がございます。</p>
+      <script src="popup.js" defer></script>
+    </section>
   </body>
 </html>

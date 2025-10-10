@@ -1,5 +1,6 @@
 const currentHost = location.hostname;
 let highlightingEnabled = false; // ハイライト機能の有効/無効を管理するフラグ
+let previewEnabled = false;
 
 // --- リンクから全てのハイライトスタイルを削除するヘルパー関数 ---
 function clearLinkStyles(link) {
@@ -75,6 +76,15 @@ function removeLinkEventListeners(link) {
     link.removeEventListener("mouseleave", handleMouseLeave);
 }
 
+// --- プレビューイベントリスナーを更新する関数 ---
+function updateLinkPreviewEventListeners(link) {
+    if (previewEnabled) {
+        addLinkEventListeners(link);
+    } else {
+        removeLinkEventListeners(link);
+    }
+}
+
 // --- リンク処理のメイン関数 ---
 function processLink(link) {
     if (link.dataset.linkHighlighterProcessed === "true" && highlightingEnabled) return;
@@ -83,20 +93,21 @@ function processLink(link) {
     if (highlightingEnabled) {
         clearLinkStyles(link); // 念のため既存スタイルをクリア
         applyHighlightingStyles(link);
-        addLinkEventListeners(link);
+        // addLinkEventListeners(link); // 削除
         link.dataset.linkHighlighterProcessed = "true";
     } else {
         clearLinkStyles(link);
-        removeLinkEventListeners(link);
+        // removeLinkEventListeners(link); // 削除
         link.dataset.linkHighlighterProcessed = "false";
     }
 }
 
 // --- ページ上の全てのリンクに対してハイライトを適用/削除する関数 ---
-function updateAllLinksHighlighting() {
+function updateAllLinksFeatures() { // 関数名を変更
     document.querySelectorAll("a[href]").forEach(link => {
         // processLinkの内部でhighlightingEnabledをチェックするため、ここでは直接呼び出す
         processLink(link);
+        updateLinkPreviewEventListeners(link); // 追加
     });
 }
 
@@ -109,7 +120,7 @@ const VIRTUAL_IFRAME_WIDTH = 1280;
 const VIRTUAL_IFRAME_HEIGHT = 1000;
 
 const previewContainer = document.createElement("div");
-const previewIframe = document.createElement("iframe"); // constに変更
+let previewIframe = document.createElement("iframe"); // constに変更
 const anchorPreviewContent = document.createElement("div"); // アンカープレビュー用の新しいdiv
 
 // --- ページ読み込み時にheadとbodyの情報をキャッシュ ---
@@ -192,6 +203,7 @@ function setupPreviewElements() {
 }
 
 function handleMouseEnter(e) {
+    if (!previewEnabled) return; // プレビューが無効な場合は何もしない
     const link = e.currentTarget;
     const href = link.getAttribute("href");
     if (!href || href.startsWith("javascript:")) return;
@@ -206,19 +218,19 @@ function handleMouseEnter(e) {
 
     previewTimeout = setTimeout(() => {
         // --- iframeを毎回再生成 ---
-        if (previewIframe) {
-            // previewIframe.remove(); // 削除コードをコメントアウトまたは削除
+        if (previewIframe && previewIframe.parentNode) {
+            previewIframe.parentNode.removeChild(previewIframe); // 削除コードをコメントアウト解除
         }
-        // previewIframe = document.createElement("iframe"); // 再生成コードをコメントアウトまたは削除
-        // previewIframe.id = "link-highlighter-preview-iframe";
-        // previewIframe.style.cssText = `
-        //     width: ${VIRTUAL_IFRAME_WIDTH}px;
-        //     height: ${VIRTUAL_IFRAME_HEIGHT}px;
-        //     border: none;
-        //     transform-origin: top left;
-        //     transform: scale(${PREVIEW_WIDTH / VIRTUAL_IFRAME_WIDTH});
-        // `;
-        // previewContainer.appendChild(previewIframe);
+        previewIframe = document.createElement("iframe"); // 再生成コードをコメントアウト解除
+        previewIframe.id = "link-highlighter-preview-iframe";
+        previewIframe.style.cssText = `
+            width: ${VIRTUAL_IFRAME_WIDTH}px;
+            height: ${VIRTUAL_IFRAME_HEIGHT}px;
+            border: none;
+            transform-origin: top left;
+            transform: scale(${PREVIEW_WIDTH / VIRTUAL_IFRAME_WIDTH});
+        `;
+        previewContainer.appendChild(previewIframe);
 
         // iframeのロードエラーを監視
         previewIframe.onload = () => {
@@ -315,6 +327,7 @@ function handleMouseEnter(e) {
 }
 
 function handleMouseLeave(e) {
+    if (!previewEnabled) return; // プレビューが無効な場合は何もしない
     const link = e.currentTarget;
     clearTimeout(previewTimeout);
     previewContainer.style.display = "none";
@@ -323,7 +336,7 @@ function handleMouseLeave(e) {
     if (previewIframe) {
         previewIframe.src = "about:blank"; // iframeのコンテンツをクリア
     }
-    previewIframe = null; // ガベージコレクションを促す
+    // previewIframe = null; // ガベージコレクションを促す // 削除
 
     // 元のタイトルを復元
     if (link && link.dataset.originalTitle) {
@@ -379,13 +392,25 @@ setupPreviewElements();
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     if (request.action === "toggleHighlight") {
         highlightingEnabled = request.enabled;
-        updateAllLinksHighlighting();
+        // if (!highlightingEnabled) {
+        //     previewEnabled = false; // ハイライトが無効になったらプレビューも強制的にオフ
+        //     // ここでプレビューコンテナも非表示にするロジックが必要
+        //     previewContainer.style.display = "none";
+        // }
+        updateAllLinksFeatures(); // 関数名を変更
+    } else if (request.action === "togglePreview") {
+        previewEnabled = request.enabled;
+        if (!previewEnabled) {
+            previewContainer.style.display = "none"; // プレビューが無効になったらコンテナを非表示
+        }
+        updateAllLinksFeatures(); // 追加：プレビューのオンオフ時にもイベントリスナーを更新
     }
     sendResponse({status: "ok"});
 });
 
 // ページの読み込み時またはコンテンツスクリプトの実行時に設定をロード
-chrome.storage.sync.get('highlightEnabled', function(data) {
+chrome.storage.sync.get(['highlightEnabled', 'previewEnabled'], function(data) {
     highlightingEnabled = data.highlightEnabled !== undefined ? data.highlightEnabled : false; // デフォルトはOFF
-    updateAllLinksHighlighting();
+    previewEnabled = data.previewEnabled !== undefined ? data.previewEnabled : false; // enableHighlightに依存せず、デフォルトはOFF
+    updateAllLinksFeatures(); // 関数名を変更
 });
